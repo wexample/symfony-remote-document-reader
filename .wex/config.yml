@@ -1,0 +1,7 @@
+domain: symfony-remote-document-reader.wex
+global:
+  name: symfony-remote-document-reader
+  type: php-package
+  version: 1.0.0
+wex:
+  version: 6.0.141
