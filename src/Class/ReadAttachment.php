@@ -3,18 +3,18 @@
 namespace Wexample\SymfonyRemoteDocumentReader\Class;
 
 /**
- * A file embedded in a PDF, with its bytes.
+ * A file embedded in the document read, with its bytes.
  */
-class ExtractedAttachment
+class ReadAttachment
 {
     /**
-     * @param string|null $relationship `Data`, `Source`, `Alternative`…; null when the file says nothing (before PDF/A-3).
+     * @param string|null $relationship `Data`, `Source`, `Alternative`, `Supplement`, `Unspecified`; null when the file says nothing.
      * @param string      $content      The raw bytes.
      */
     public function __construct(
         public readonly string $name,
         public readonly string $mediaType,
-        public readonly string $description,
+        public readonly ?string $description,
         public readonly ?string $relationship,
         public readonly string $content,
     ) {
@@ -25,8 +25,8 @@ class ExtractedAttachment
         return new self(
             $data['name'],
             $data['mediaType'],
-            $data['description'],
-            $data['relationship'],
+            $data['description'] ?? null,
+            $data['relationship'] ?? null,
             (string) base64_decode($data['content'], true),
         );
     }

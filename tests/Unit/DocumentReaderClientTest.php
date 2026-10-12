@@ -14,66 +14,85 @@ class DocumentReaderClientTest extends TestCase
 {
     private const string XML = '<rsm:CrossIndustryInvoice/>';
 
-    private function extraction(): array
-    {
-        return [
-            'ok' => true,
-            'information' => ['title' => 'Invoice F-001', 'created' => '2026-10-12T09:30:00+02:00'],
-            'language' => 'fr',
-            'pdfa' => ['part' => 3, 'conformance' => 'B'],
-            'attachments' => [
-                ['name' => 'invoice.json', 'mediaType' => 'application/json', 'description' => '', 'relationship' => 'Data', 'size' => 2, 'content' => base64_encode('{}')],
-                ['name' => 'factur-x.xml', 'mediaType' => 'text/xml', 'description' => '', 'relationship' => 'Alternative', 'size' => strlen(self::XML), 'content' => base64_encode(self::XML)],
-            ],
-            'facturx' => ['fileName' => 'factur-x.xml', 'documentType' => 'INVOICE', 'version' => '1.0', 'conformance' => 'EN 16931', 'declared' => true],
-        ];
-    }
+    private const array UNMAPPED = ['file' => [], 'attachments' => [], 'content' => []];
 
-    public function testThePdfIsPostedAsItIsAndItsContentComesBack(): void
+    private function client(array $answer, ?array &$sent = null): DocumentReaderClient
     {
-        $sent = null;
-        $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$sent) {
-            $sent = ['method' => $method, 'url' => $url, 'body' => $options['body'], 'headers' => $options['headers']];
+        $http = new MockHttpClient(function (string $method, string $url, array $options) use ($answer, &$sent) {
+            $sent = ['method' => $method, 'url' => $url, 'body' => $options['body']];
 
-            return new MockResponse(json_encode($this->extraction()));
+            return new MockResponse(json_encode(['ok' => true, ...$answer]));
         });
 
-        $extraction = (new DocumentReaderClient($http, 'http://document_reader:8000/'))->extract('%PDF-1.7 …');
+        return new DocumentReaderClient($http, 'http://document_reader:8000/');
+    }
+
+    private function cell(string $type, string $text): array
+    {
+        return ['type' => $type, 'content' => '' === $text ? [] : [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => $text]]]]];
+    }
+
+    public function testAFacturXIsReadWithoutItsPages(): void
+    {
+        $client = $this->client([
+            'document' => ['type' => 'doc', 'title' => 'Invoice F-001', 'language' => 'fr'],
+            'attachments' => [['name' => 'invoice.json', 'mediaType' => 'application/json', 'relationship' => 'Data', 'content' => base64_encode('{}')]],
+            'output' => ['variant' => 'pdf/a-3b', 'facturx' => ['conformance' => 'EN 16931', 'relationship' => 'Alternative', 'xml' => base64_encode(self::XML)]],
+            'unmapped' => self::UNMAPPED,
+        ], $sent);
+
+        $reading = $client->read('F-001.pdf', '%PDF-1.7 …', pages: false);
 
         $this->assertSame('POST', $sent['method']);
-        $this->assertSame('http://document_reader:8000/extract', $sent['url']);
+        $this->assertSame('http://document_reader:8000/read?name=F-001.pdf&content=false&raw=false', $sent['url']);
         $this->assertSame('%PDF-1.7 …', $sent['body']);
-        $this->assertContains('Content-Type: application/pdf', $sent['headers']);
 
-        $this->assertSame('Invoice F-001', $extraction->information['title']);
-        $this->assertSame(3, $extraction->pdfa['part']);
-        $this->assertSame('Data', $extraction->getAttachment('invoice.json')->relationship);
-        $this->assertSame('{}', $extraction->getAttachment('invoice.json')->content);
-        $this->assertSame(self::XML, $extraction->getFacturXXml());
-        $this->assertNull($extraction->getAttachment('missing.txt'));
+        $this->assertSame('Invoice F-001', $reading->document['title']);
+        $this->assertSame('pdf/a-3b', $reading->output['variant']);
+        $this->assertSame('{}', $reading->getAttachment('invoice.json')->content);
+        $this->assertNull($reading->getAttachment('invoice.json')->description);
+        $this->assertTrue($reading->isFacturXDeclared());
+        $this->assertSame(self::XML, $reading->getFacturXXml());
     }
 
-    public function testAPdfWithoutFacturXHasNoXml(): void
+    public function testAnUndeclaredFacturXStillGivesItsXml(): void
     {
-        $data = [...$this->extraction(), 'attachments' => [], 'facturx' => null, 'pdfa' => null];
-        $http = new MockHttpClient(new MockResponse(json_encode($data)));
+        $reading = $this->client([
+            'document' => ['type' => 'doc'],
+            'attachments' => [['name' => 'factur-x.xml', 'mediaType' => 'text/xml', 'content' => base64_encode(self::XML)]],
+            'unmapped' => [...self::UNMAPPED, 'file' => ['facturx' => ['fileName' => 'factur-x.xml', 'declared' => false]]],
+        ])->read('a.pdf', '%PDF');
 
-        $this->assertNull((new DocumentReaderClient($http, 'http://reader'))->extract('%PDF')->getFacturXXml());
+        $this->assertFalse($reading->isFacturXDeclared());
+        $this->assertSame(self::XML, $reading->getFacturXXml());
     }
 
-    public function testConvertNamesTheFileAndReturnsTheDoclingDocument(): void
+    public function testAPlainPdfHasNoXml(): void
     {
-        $sent = null;
-        $http = new MockHttpClient(function (string $method, string $url) use (&$sent) {
-            $sent = $url;
+        $reading = $this->client(['document' => ['type' => 'doc'], 'unmapped' => self::UNMAPPED])->read('a.pdf', '%PDF');
 
-            return new MockResponse(json_encode(['ok' => true, 'engine' => 'docling', 'document' => ['schema_name' => 'DoclingDocument']]));
-        });
+        $this->assertNull($reading->getFacturXXml());
+        $this->assertSame([], $reading->attachments);
+    }
 
-        $document = (new DocumentReaderClient($http, 'http://reader'))->convert('relevé octobre.pdf', '%PDF');
+    public function testTablesComeBackAsRowsOfTexts(): void
+    {
+        $reading = $this->client([
+            'document' => ['type' => 'doc', 'content' => [
+                ['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Before']]],
+                ['type' => 'table', 'content' => [
+                    ['type' => 'tableRow', 'content' => [$this->cell('tableHeader', 'Title'), $this->cell('tableHeader', 'Price')]],
+                    ['type' => 'tableRow', 'content' => [
+                        ['type' => 'tableCell', 'content' => [['type' => 'paragraph', 'content' => [['type' => 'text', 'text' => 'Design'], ['type' => 'text', 'text' => ' work', 'marks' => [['type' => 'bold']]]]]]],
+                        $this->cell('tableCell', '1 200,50'),
+                    ]],
+                    ['type' => 'tableRow', 'content' => [$this->cell('tableCell', 'Print'), $this->cell('tableCell', '')]],
+                ]],
+            ]],
+            'unmapped' => self::UNMAPPED,
+        ])->read('lines.xlsx', 'PK…');
 
-        $this->assertSame('http://reader/convert?name=relev%C3%A9+octobre.pdf', $sent);
-        $this->assertSame(['schema_name' => 'DoclingDocument'], $document);
+        $this->assertSame([[['Title', 'Price'], ['Design work', '1 200,50'], ['Print', '']]], $reading->getTables());
     }
 
     public function testAnUnreadableFileIsTheCallersNotTheServices(): void
@@ -83,7 +102,7 @@ class DocumentReaderClientTest extends TestCase
         $this->expectException(UnreadableDocumentException::class);
         $this->expectExceptionMessage('Not a PDF');
 
-        (new DocumentReaderClient($http, 'http://reader'))->extract('hello');
+        (new DocumentReaderClient($http, 'http://reader'))->read('a.pdf', 'hello');
     }
 
     public function testDoclingAwayIsAServiceFailure(): void
@@ -91,7 +110,7 @@ class DocumentReaderClientTest extends TestCase
         $http = new MockHttpClient(new MockResponse('{"ok":false,"error":"docling unreachable"}', ['http_code' => 502]));
 
         try {
-            (new DocumentReaderClient($http, 'http://reader'))->convert('a.pdf', '%PDF');
+            (new DocumentReaderClient($http, 'http://reader'))->read('a.docx', 'PK');
             $this->fail('No exception.');
         } catch (DocumentReaderException $exception) {
             $this->assertNotInstanceOf(UnreadableDocumentException::class, $exception);
@@ -106,6 +125,6 @@ class DocumentReaderClientTest extends TestCase
         $this->assertSame(RemoteState::Unconfigured, $client->checkStatus()->state);
 
         $this->expectException(DocumentReaderException::class);
-        $client->extract('%PDF');
+        $client->read('a.pdf', '%PDF');
     }
 }
