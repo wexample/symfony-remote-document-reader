@@ -1,0 +1,6 @@
+`symfony-remote-document-reader` is the Symfony client of a document-reader service, which reads documents written by others in a sandbox, never in the application's process. `DocumentReaderClient` is declared as a `symfony-remote`, so `remote:status` checks the service.
+
+- `extract()` reads exactly what a PDF carries besides its pages: its description, the PDF/A level it claims, its attachments with their bytes, and its Factur-X declaration (`DocumentExtraction::getFacturXXml()`).
+- `convert()` hands any document to docling and returns the docling document: pages, text and tables.
+
+The package knows no document of its own: what an invoice's XML says is read by the package that owns invoices.

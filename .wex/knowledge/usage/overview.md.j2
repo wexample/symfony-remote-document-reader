@@ -1,0 +1,15 @@
+```php
+$extraction = $documentReaderClient->extract($pdf);
+
+$extraction->facturx;                       // ['fileName' => 'factur-x.xml', 'conformance' => 'EN 16931', 'declared' => true, …] or null
+$xml = $extraction->getFacturXXml();        // the CII, or null
+$json = $extraction->getAttachment('invoice.json')?->content;
+
+$document = $documentReaderClient->convert('statement-2026-10.pdf', $pdf);   // docling document
+```
+
+The file name passed to `convert()` keeps its extension: docling recognises the format by it.
+
+Two failures, kept apart. `UnreadableDocumentException` means the service is up but the file cannot be read (not a PDF, a broken one); retrying is pointless. Its parent `DocumentReaderException` covers everything else: no URL configured, a refused request, docling unreachable.
+
+`facturx.declared` is false when the XML is embedded under a standard name but the metadata does not announce it: a broken invoice, still readable. The PDF/A level is what the file claims, not a validation. The contract is the service's (`SERVICES/local/document-reader`, `extraction.schema.json`).

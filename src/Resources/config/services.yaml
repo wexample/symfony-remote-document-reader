@@ -1,0 +1,10 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        public: false
+
+    Wexample\SymfonyRemoteDocumentReader\Service\DocumentReaderClient:
+        arguments:
+            $httpClient: '@?http_client'
+            $baseUrl: '%wexample_symfony_remote_document_reader.url%'
