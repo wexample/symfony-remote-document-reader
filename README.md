@@ -1,6 +1,6 @@
 # symfony-remote-document-reader
 
-Version: 2.0.0
+Version: 2.0.1
 
 ```php
 // A received invoice: only what the PDF's file says, without docling (seconds rather than minutes).
