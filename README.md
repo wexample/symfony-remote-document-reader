@@ -1,81 +1,35 @@
 # symfony-remote-document-reader
 
-Version: 2.0.3
+Version: 2.0.4
 
-```php
-// A received invoice: only what the PDF's file says, without docling (seconds rather than minutes).
-$reading = $documentReaderClient->read('F-001.pdf', $pdf, pages: false);
-
-$reading->isFacturXDeclared();              // declared as Factur-X expects
-$xml = $reading->getFacturXXml();           // the CII, declared or not, or null
-$json = $reading->getAttachment('invoice.json')?->content;
-
-// A spreadsheet or a scanned statement: its pages, read by docling.
-$reading = $documentReaderClient->read('lines.xlsx', $content);
-$rows = $reading->getTables()[0] ?? [];     // rows of cell texts
-$reading->document;                         // the whole `doc` node
-```
-
-The file name keeps its extension: its format is recognised by it.
-
-What the norm has no place for is set aside under `unmapped`, with the reason. A Factur-X declaration that does not fit, for example, lands in `unmapped.file.facturx`, and its XML stays among the attachments, where `getFacturXXml()` still finds it.
-
-Two failures, kept apart. `UnreadableDocumentException` means the service is up but the file cannot be read (not a PDF, a broken one); retrying is pointless. Its parent `DocumentReaderException` covers everything else: no URL configured, a refused request, docling unreachable.
-
-The contract belongs to the service (`SERVICES/local/document-reader`, `read_response.schema.json`); the norm itself lives in `SERVICES/local/json-schema`, under `document/`.
+Client of a document-reader service: what a PDF carries besides its pages (attachments, Factur-X), and documents converted by docling, declared as a symfony-remote
 
 ## Table of Contents
 
-- [Integration in the Suite](#integration-in-the-suite)
-- [Dependencies](#dependencies)
-- [Versioning & Compatibility Policy](#versioning--compatibility-policy)
-- [License](#license)
-- [About us](#about-us)
-- [Migration Notes](#migration-notes)
+- [Installation](#installation)
+- [Introduction](#introduction)
 
-## Integration in the Suite
+## Installation
 
-This package is part of the Wexample Suite — a collection of high-quality, modular tools designed to work seamlessly together across multiple languages and environments.
+```php
+// config/bundles.php
+Wexample\SymfonyRemote\WexampleSymfonyRemoteBundle::class => ['all' => true],
+Wexample\SymfonyRemoteDocumentReader\WexampleSymfonyRemoteDocumentReaderBundle::class => ['all' => true],
+```
 
-### Related Packages
+```yaml
+# config/packages/wexample_symfony_remote_document_reader.yaml
+wexample_symfony_remote_document_reader:
+  url: '%env(default::DOCUMENT_READER_URL)%'   # e.g. http://document_reader:8000
+```
 
-The suite includes packages for configuration management, file handling, prompts, and more. Each package can be used independently or as part of the integrated suite.
+Without a URL the remote reports itself unconfigured and every call throws.
 
-## Dependencies
+`symfony-remote-document-reader` is the Symfony client of a document-reader service, which reads documents written by others in a sandbox, never in the application's process. `DocumentReaderClient` is declared as a `symfony-remote`, so `remote:status` checks the service.
 
-- php: >=8.5
-- wexample/symfony-helpers: >=18.0.0
-- wexample/symfony-remote: >=2.0.0
-- symfony/http-client: >=7.0
+`read()` posts any document docling reads (PDF, DOCX, XLSX, CSV, HTML, images…) and returns a `DocumentReading` in the shared norm, the same `document`, `attachments` and `output` that pdf-factory renders from:
 
-## Versioning & Compatibility Policy
+- the content of the pages, read by docling;
+- for a PDF, what the file says about itself, its attachments with their bytes, and its Factur-X.
 
-Wexample packages follow **Semantic Versioning** (SemVer):
-
-- **MAJOR**: Breaking changes
-- **MINOR**: New features, backward compatible
-- **PATCH**: Bug fixes, backward compatible
-
-We maintain backward compatibility within major versions and provide clear migration guides for breaking changes.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-Free to use in both personal and commercial projects.
-
-## About us
-
-[Wexample](https://wexample.com) stands as a cornerstone of the digital ecosystem — a collective of seasoned engineers, researchers, and creators driven by a relentless pursuit of technological excellence. More than a media platform, it has grown into a vibrant community where innovation meets craftsmanship, and where every line of code reflects a commitment to clarity, durability, and shared intelligence.
-
-This packages suite embodies this spirit. Trusted by professionals and enthusiasts alike, it delivers a consistent, high-quality foundation for modern development — open, elegant, and battle-tested. Its reputation is built on years of collaboration, refinement, and rigorous attention to detail, making it a natural choice for those who demand both robustness and beauty in their tools.
-
-Wexample cultivates a culture of mastery. Each package, each contribution carries the mark of a community that values precision, ethics, and innovation — a community proud to shape the future of digital craftsmanship.
-
-Built and maintained by [Romain Weeger](https://weeger.io).
-
-## Migration Notes
-
-When upgrading between major versions, refer to the migration guides in the documentation.
-
-Breaking changes are clearly documented with upgrade paths and examples.
+The package knows no document of its own: what an invoice's XML says is read by the package that owns invoices.

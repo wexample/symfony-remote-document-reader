@@ -1,7 +1,7 @@
 {
   "name": "wexample/symfony-remote-document-reader",
   "description": "Client of a document-reader service: what a PDF carries besides its pages (attachments, Factur-X), and documents converted by docling, declared as a symfony-remote",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "type": "library",
   "license": "MIT",
   "autoload": {
@@ -22,8 +22,8 @@
   ],
   "require": {
     "php": ">=8.5",
-    "wexample/symfony-helpers": ">=18.0.0",
-    "wexample/symfony-remote": ">=2.0.0",
+    "wexample/symfony-helpers": ">=18.0.2",
+    "wexample/symfony-remote": ">=2.0.10",
     "symfony/http-client": ">=7.0"
   },
   "require-dev": {
