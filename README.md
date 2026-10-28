@@ -1,6 +1,6 @@
 # symfony-remote-document-reader
 
-Version: 2.0.4
+Version: 2.0.5
 
 Client of a document-reader service: what a PDF carries besides its pages (attachments, Factur-X), and documents converted by docling, declared as a symfony-remote
 
