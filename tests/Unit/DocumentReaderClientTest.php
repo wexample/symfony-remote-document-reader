@@ -118,6 +118,32 @@ class DocumentReaderClientTest extends TestCase
         }
     }
 
+    public function testAStreamIsSentAsItIsRead(): void
+    {
+        $body = null;
+        $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$body) {
+            // Handed on as the stream, for the client to read as it sends.
+            $this->assertIsResource($options['body']);
+            $body = stream_get_contents($options['body']);
+
+            return new MockResponse(json_encode(['ok' => true, 'document' => ['type' => 'doc'], 'unmapped' => self::UNMAPPED]));
+        });
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, '%PDF-1.7 streamed');
+        rewind($stream);
+
+        (new DocumentReaderClient($http, 'http://document_reader:8000'))->read('scan.pdf', $stream, pages: false);
+
+        $this->assertSame('%PDF-1.7 streamed', $body);
+    }
+
+    public function testAContentNeitherStringNorStreamIsRefused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new DocumentReaderClient(new MockHttpClient(), 'http://document_reader:8000'))->read('scan.pdf', ['%PDF']);
+    }
+
     public function testWithoutUrlTheRemoteIsUnconfigured(): void
     {
         $client = new DocumentReaderClient(new MockHttpClient(), null);

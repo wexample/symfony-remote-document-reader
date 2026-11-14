@@ -2,6 +2,7 @@
 
 namespace Wexample\SymfonyRemoteDocumentReader\Service;
 
+use InvalidArgumentException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use Wexample\PhpRemote\Class\RemoteStatus;
 use Wexample\PhpRemote\Interface\RemoteInterface;
@@ -46,16 +47,23 @@ class DocumentReaderClient implements RemoteInterface
     }
 
     /**
-     * @param string $fileName The document's file name, extension included: its format is recognised by it.
-     * @param bool   $pages    False to skip docling: only what a PDF's file says (metadata, attachments, Factur-X), in seconds rather than minutes.
-     * @param bool   $raw      True to get docling's own answer too, under `engine`.
+     * @param string          $fileName The document's file name, extension included: its format is recognised by it.
+     * @param string|resource $content  The document itself, or a stream open on it: a stream is sent as it is read, a large scan never held whole in memory.
+     * @param bool            $pages    False to skip docling: only what a PDF's file says (metadata, attachments, Factur-X), in seconds rather than minutes.
+     * @param bool            $raw      True to get docling's own answer too, under `engine`.
+     *
+     * @throws InvalidArgumentException for a content neither a string nor a stream
      */
     public function read(
         string $fileName,
-        string $content,
+        mixed $content,
         bool $pages = true,
         bool $raw = false
     ): DocumentReading {
+        if (! is_string($content) && ! is_resource($content)) {
+            throw new InvalidArgumentException(sprintf('A document is read from a string or a stream, not from %s.', get_debug_type($content)));
+        }
+
         if (! $this->isConfigured()) {
             throw new DocumentReaderException('document-reader is not configured (wexample_symfony_remote_document_reader.url).');
         }
